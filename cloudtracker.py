@@ -101,7 +101,7 @@ def get_output_size(path):
 
 	return size
 
-
+''' CloudTracker class definition '''
 class CloudTracker:
 	''' Assigns a job uuid to this instance of CloudTracker'''
 	def __init__(self, tracking_number='0'):
