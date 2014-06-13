@@ -81,12 +81,15 @@ def get_output_size(path):
 
 
 class CloudTracker:
+	''' Assigns a job uuid to this instance of CloudTracker'''
 	def __init__(self, tracking_number='0'):
 		print "Initialized CloudTracker instance with uuid " + tracking_number
 		self.uuid = tracking_number
 
+	''' Gathers EC2 metadata and stores it in a manifest file in a new S3 directory'''
 	def init_tracking(self):
 		print "Initializing tracking..."
+		# s3_helper functions
 		ami_id = get_ami_id()
 		instance_type = get_instance_type()
 		region = get_region()
@@ -97,6 +100,9 @@ class CloudTracker:
 		print "Manifest : " + manifest
 		create_file("gdouglas.cs.ucsb.edu.research_bucket", self.uuid + "/manifest", manifest)
 
+	''' Parses exec_str for an executable name, input parameters, and input files'''
+	''' Executable name and input parameters are stored in the manifest file '''
+	''' Input files are stored alongside the manifest file in a subfolder called files/ '''
 	def track_input(self, exec_str):
 		print "Tracking inputs..."
 		executable, inputs, files = parse_executable(exec_str)
@@ -110,8 +116,10 @@ class CloudTracker:
 		print files
 		for f in files:
 			upload_file("gdouglas.cs.ucsb.edu.research_bucket", f, self.uuid + "/files/" + f.strip('/'))
+		# Save the current time for calculating total execution time later
 		self.timer = datetime.now()
 
+	''' Store execution time, output dataset size, and location of output directory to the manifest file'''
 	def track_output(self, output_dir):
 		print "Tracking outputs..."
 		exec_time = (datetime.now() - self.timer).total_seconds()
@@ -121,12 +129,16 @@ class CloudTracker:
 		print manifest
 		add_to_file("gdouglas.cs.ucsb.edu.research_bucket", self.uuid + "/manifest", manifest)
 
+	''' Launches a new EC2 instance with the provided security credentials provided '''
+	''' Gathers provenance information from storage based on provided uuid '''
+	''' Uses user data script to download input files to the instance and run the same executable with identical input parameters '''
 	def run(self, uuid, access_key, secret_key):
 
 		print "running job with uuid " + str(uuid)
 		manifest = get_file("gdouglas.cs.ucsb.edu.research_bucket", str(uuid) + "/manifest", access_key, secret_key).get_contents_as_string()
 		params, inputs = parse_manifest(manifest.strip())
 
+		# Connect to EC2
 		print "Connecting to " + params['region']
 		conn = boto.ec2.connect_to_region(
 			params['region'],
@@ -135,9 +147,11 @@ class CloudTracker:
 		)
 
 		files = get_all_files("gdouglas.cs.ucsb.edu.research_bucket", str(uuid) + "/files", access_key, secret_key)
+		# Create user data script 
 		script = generate_launch_script(str(uuid), params, inputs, files)
 		print script
 
+		# Launch new EC2 instance with user data script
 		print "Launching worker from AMI: " + params['ami_id']
 		rs = conn.run_instances(
 			params['ami_id'],
@@ -146,6 +160,7 @@ class CloudTracker:
 			user_data=script
 		)
 
+		# Wait until the EC2 instance status changes to running
 		inst = rs.instances[0]
 		while inst.state != 'running':
 			inst.update()

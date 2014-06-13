@@ -4,6 +4,7 @@ CloudTracker
 Provenance Tracking for Data Reproduction
 
 cloudtracker.py contains the CloudTracker class that can be imported into a job management system.
+s3_helper.py contains many helpful functions that CloudTracker uses to interact with Amazon S3
 
 The following library calls can be used to perform provenance tracking:
 
